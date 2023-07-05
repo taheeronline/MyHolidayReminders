@@ -6,6 +6,7 @@ using System.Data.SqlClient;
 using System.Data;
 using System.Net.Mail;
 using System.Net;
+using System.Configuration;
 
 namespace MyHolidayReminders
 {
@@ -15,8 +16,8 @@ namespace MyHolidayReminders
         private string connectionString = "Data Source=IE-0024\\SQLEXPRESS;Initial Catalog=NTINTReminders;User ID=sa;Password=Ntint123;"; // Update with your database connection details
 
         // Gmail account details for sending email
-        private string gmailUsername = "taheeronline@gmail.com"; // Replace with your Gmail email address
-        private string gmailPassword = "uxqjzzimesgwzpay"; // Replace with your Gmail password or app password
+        private string gmailUsername = ConfigurationManager.AppSettings["Email"];
+        private string gmailPassword = ConfigurationManager.AppSettings["Password"];
 
 
 
