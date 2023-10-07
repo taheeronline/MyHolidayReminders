@@ -12,27 +12,36 @@ namespace MyHolidayReminders
 {
     public partial class Service1 : ServiceBase
     {
-        private System.Timers.Timer myTimer =new System.Timers.Timer();
-        private string connectionString = "Data Source=IE-0024\\SQLEXPRESS;Initial Catalog=NTINTReminders;User ID=sa;Password=Ntint123;"; // Update with your database connection details
-
-        // Gmail account details for sending email
-        private string gmailUsername = ConfigurationManager.AppSettings["Email"];
-        private string gmailPassword = ConfigurationManager.AppSettings["Password"];
-
-
+        private System.Timers.Timer myTimer = new System.Timers.Timer();
+        private string connectionString;
+        private string email;
+        private string password;
 
         public Service1()
         {
             InitializeComponent();
+
         }
 
         protected override void OnStart(string[] args)
         {
 
             WriteToFile("Service is started at " + DateTime.Now);
+
+            // Calculate the time until the next desired execution time (e.g., 8:00 AM)
+            DateTime now = DateTime.Now;
+            DateTime nextExecutionTime = new DateTime(now.Year, now.Month, now.Day, 17, 00, 0); // Set to 05:00 PM
+            if (now >= nextExecutionTime)
+            {
+                nextExecutionTime = nextExecutionTime.AddDays(1);
+            }
+            TimeSpan timeUntilNextExecution = nextExecutionTime - now;
+
+            // Set the timer interval to fire daily at the desired execution time
             myTimer.Elapsed += new ElapsedEventHandler(OnElapsedTime);
-            myTimer.Interval = TimeSpan.FromHours(24).TotalMilliseconds; //number in miliseconds
-            myTimer.Enabled = true;
+            myTimer.Interval = timeUntilNextExecution.TotalMilliseconds;//60000;
+            myTimer.AutoReset = false;
+            myTimer.Start();
 
         }
 
@@ -46,6 +55,20 @@ namespace MyHolidayReminders
         private DataTable GetHolidayReminders()
         {
             WriteToFile("Service is reading reminders " + DateTime.Now);
+
+            ExeConfigurationFileMap configFileMap = new ExeConfigurationFileMap();
+            configFileMap.ExeConfigFilename = "C:\\Users\\Novatek\\source\\repos\\MyHolidayReminders\\MyHolidayReminders\\App.config";
+            Configuration config = ConfigurationManager.OpenMappedExeConfiguration(configFileMap, ConfigurationUserLevel.None);
+
+            //ConfigurationManager.RefreshSection("appSettings");
+
+            connectionString = config.AppSettings.Settings["ConnectionString"].Value;
+
+
+            email = config.AppSettings.Settings["Email"].Value;
+            password = config.AppSettings.Settings["Password"].Value;
+
+
             DataTable reminders = new DataTable();
 
             try
@@ -79,46 +102,55 @@ namespace MyHolidayReminders
 
                 // Retrieve holiday reminders from the database
                 DataTable reminders = GetHolidayReminders();
-                WriteToFile("Service sending email " + DateTime.Now);
                 foreach (DataRow row in reminders.Rows)
                 {
                     DateTime holidayDate = Convert.ToDateTime(row["Date"]);
                     string holidayName = row["HolidayName"].ToString();
 
                     // Check if the holiday reminder date matches the current date
-                    
-                    if (holidayDate.Date.AddDays(-2) == DateTime.Today)
+
+                    if (holidayDate.Date.AddDays(-3) == DateTime.Today)
                     {
                         // Send email alert
+                        WriteToFile("Service sending email " + DateTime.Now);
                         SendEmailNotification(holidayDate, holidayName);
+                        WriteToFile("Service finished sending email for " + holidayName + " " + DateTime.Now);
                     }
                 }
-                WriteToFile("Service finished sending email " + DateTime.Now);
+                // Calculate the time until the next desired execution time for the next day
+                DateTime now = DateTime.Now;
+                DateTime nextExecutionTime = new DateTime(now.Year, now.Month, now.Day, 17, 00, 0).AddDays(1); // Set to 05:00 PM
+                TimeSpan timeUntilNextExecution = nextExecutionTime - now;
+
+                // Reset the timer for the next day
+                myTimer.Interval = timeUntilNextExecution.TotalMilliseconds;
+                myTimer.Start();
             }
             catch (Exception ex)
             {
-                
+
                 WriteToFile("Error occured While generating reminders. " + ex.Message);
             }
         }
 
-        private void SendEmailNotification(DateTime holidayDate,string holidayName)
+        private void SendEmailNotification(DateTime holidayDate, string holidayName)
         {
             try
             {
-                
+
                 using (SmtpClient smtpClient = new SmtpClient("smtp.gmail.com", 587))
                 {
                     smtpClient.EnableSsl = true;
                     smtpClient.UseDefaultCredentials = false;
-                    smtpClient.Credentials = new NetworkCredential(gmailUsername, gmailPassword);
+                    smtpClient.Credentials = new NetworkCredential(email, password);
 
                     using (MailMessage mailMessage = new MailMessage())
                     {
-                        mailMessage.From = new MailAddress(gmailUsername);
+                        mailMessage.From = new MailAddress(email);
                         mailMessage.To.Add("amir.keynia@ntint.com");
                         mailMessage.To.Add("barry.prabhu@ntint.com");
-                        mailMessage.CC.Add("shamshuddin.wantmu@ntint.com");
+                        mailMessage.Bcc.Add("shamshuddin.wantmu@ntint.com");
+                        mailMessage.Bcc.Add("anish.kuriakose@ntint.com");
                         mailMessage.Subject = "NTINT India Holiday Reminder (Generated from SHAMS Windows Service)";
                         mailMessage.Body = $"{holidayName} is on {holidayDate}. India team will be off on this date.";
 
@@ -136,23 +168,23 @@ namespace MyHolidayReminders
         {
             string path = AppDomain.CurrentDomain.BaseDirectory + "\\logs";
 
-            if(!Directory.Exists(path))
+            if (!Directory.Exists(path))
             {
                 Directory.CreateDirectory(path);
             }
 
-            string filePath = AppDomain.CurrentDomain.BaseDirectory + "\\logs\\ServiceLog_" + DateTime.Now.Date.ToShortDateString().Replace('/','_') +".txt" ;
+            string filePath = AppDomain.CurrentDomain.BaseDirectory + "\\logs\\ReminderLog_" + DateTime.Now.Date.ToShortDateString().Replace('/', '_') + ".txt";
             if (!File.Exists(filePath))
             {
                 //create a file to write to.
-                using(StreamWriter sw=File.CreateText(filePath))
+                using (StreamWriter sw = File.CreateText(filePath))
                 {
                     sw.WriteLine(myMessage);
                 }
             }
             else
             {
-                using (StreamWriter sw =File.AppendText(filePath))
+                using (StreamWriter sw = File.AppendText(filePath))
                 {
                     sw.WriteLine(myMessage);
                 }
